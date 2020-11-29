@@ -1,0 +1,12 @@
+Download Terraform ,GIT, AWSCLI and Install Terraform,GIT,AWSCLI.
+
+Set environmental variable for terraform and Git.
+
+Install VSCode and plugin for terraform
+
+
+
+PS C:\Anbu\TerraformPro\Terraform-Prod>aws configure --profile anbu
+AWS Access Key ID [****************AMVD]:
+AWS Secret Access Key [****************ItGY]:
+Default region name [us-east-1]:
