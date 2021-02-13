@@ -10,5 +10,5 @@ variable "nameoffunction" {
 
 variable "versionofpython" {
   description = "Mention Python version"
-  default = "python3.7"
+  default = "python3.8"
 }
