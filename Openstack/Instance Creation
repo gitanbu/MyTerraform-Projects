@@ -1,0 +1,158 @@
+# Params file for variables
+
+#### GLANCE
+variable "image" {
+  type    = string
+  default = "ubuntu_20_04"
+}
+
+#### NEUTRON
+variable "external_network" {
+  type    = string
+  default = "external"
+}
+
+# UUID of external gateway
+variable "external_gateway" {
+  type    = string
+  default = "444630f0-28eb-4194-8b6c-6c98b0fb506b"
+}
+
+variable "dns_ip" {
+  type    = list(string)
+  default = ["8.8.8.8", "8.8.8.4"]
+}
+
+#### VM parameters
+variable "flavor_http" {
+  type    = string
+  default = "m1.small"
+}
+
+variable "network_http" {
+  type = map(string)
+  default = {
+    subnet_name = "subnet-http"
+    cidr        = "192.168.1.0/24"
+  }
+}
+# Configure the OpenStack Provider
+provider "openstack" {
+  user_name   = "admin"
+  tenant_name = "admin"
+  password    = "AXhC8KJPsNg3IA9LXBWLX0dT4SrNsMLa"
+  auth_url    = "http://172.31.27.130:5000/v3/"
+  region      = "microstack"
+}
+resource "openstack_images_image_v2" "ubuntu_20_04" {
+
+  name             = "ubuntu_20_04"
+  visibility       = "public"
+  image_source_url = "https://cloud-images.ubuntu.com/focal/20210216/focal-server-cloudimg-amd64.img"
+  container_format = "bare"
+  disk_format      = "qcow2"
+  }
+resource "openstack_compute_keypair_v2" "my_cloud_key" {
+  name       = "my_cloud_key"
+  public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCMZ78zjiKLUlcwuz8gEAcU5+/wLjk7nupnq8CxUIa1SfVxp1sx3Imp0QgxGLbIgxG7QljypzjXiD0buXtPglMH6x1klwS2VIoy+JHETdKYpnMZ6xEVKxRw+FzbEoPBP+f41Wgsa0U2cmvDvIswuCt0scrCX9lL73nuT+cUjyJqZpvGdRz6OOjRfJXDO27GtAAiZlSD93N+RbF9x5J4BtISQE9hNd/dnfw52rR6OMIplcRskH+N8FUqv617fidXVUi90r3QErQ5/cIQtJubbJ6/nwXtm6DdlVsEE/+Y/RjqCuhaokbDMgxWai3GdA7tLZQvYbsWhDqsqdMgI1XntN7t"
+}
+
+#### INSTANCE HTTP ####
+#
+# Create instance
+#
+resource "openstack_compute_instance_v2" "http" {
+  name        = "http"
+  image_name  = var.image
+  flavor_name = var.flavor_http
+  key_pair    = openstack_compute_keypair_v2.my_cloud_key.name
+  network {
+    port = openstack_networking_port_v2.http.id
+  }
+}
+# Create network port
+resource "openstack_networking_port_v2" "http" {
+  name           = "port-instance-http"
+  network_id     = openstack_networking_network_v2.generic.id
+  admin_state_up = true
+  security_group_ids = [
+    openstack_compute_secgroup_v2.ssh.id,
+    openstack_compute_secgroup_v2.http.id,
+    openstack_compute_secgroup_v2.https.id,
+]
+  fixed_ip {
+    subnet_id = openstack_networking_subnet_v2.http.id
+  }
+}
+
+# Create floating ip
+resource "openstack_networking_floatingip_v2" "http" {
+  pool = var.external_network
+}
+
+# Attach floating ip to instance
+resource "openstack_compute_floatingip_associate_v2" "http" {
+  floating_ip = openstack_networking_floatingip_v2.http.address
+  instance_id = openstack_compute_instance_v2.http.id
+}
+
+# Acces group, open input port 80 and ssh port
+resource "openstack_compute_secgroup_v2" "http" {
+  name        = "http"
+  description = "Open input http port"
+  rule {
+    from_port   = 80
+    to_port     = 80
+    ip_protocol = "tcp"
+    cidr        = "0.0.0.0/0"
+}
+}
+# Acces group, open input port 443 and ssh port
+resource "openstack_compute_secgroup_v2" "https" {
+  name        = "https"
+  description = "Open input http port"
+  rule {
+    from_port   = 443
+    to_port     = 443
+    ip_protocol = "tcp"
+    cidr        = "0.0.0.0/0"
+}
+}
+
+resource "openstack_compute_secgroup_v2" "ssh" {
+  name        = "ssh"
+  description = "Open input ssh port"
+  rule {
+    from_port   = 22
+    to_port     = 22
+    ip_protocol = "tcp"
+    cidr        = "0.0.0.0/0"
+  }
+}
+
+#### NETWORK CONFIGURATION ####
+
+# Router creation
+resource "openstack_networking_router_v2" "generic" {
+  name                = "router-generic"
+  external_network_id = var.external_gateway
+}
+
+# Network creation
+resource "openstack_networking_network_v2" "generic" {
+  name = "network-generic"
+}
+
+# Subnet http configuration
+resource "openstack_networking_subnet_v2" "http" {
+  name            = var.network_http["subnet_name"]
+  network_id      = openstack_networking_network_v2.generic.id
+  cidr            = var.network_http["cidr"]
+  dns_nameservers = var.dns_ip
+}
+
+# Router interface configuration
+resource "openstack_networking_router_interface_v2" "http" {
+  router_id = openstack_networking_router_v2.generic.id
+  subnet_id = openstack_networking_subnet_v2.http.id
+}
