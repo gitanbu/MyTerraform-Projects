@@ -1,0 +1,25 @@
+resource "aws_subnet" "private" {
+  vpc_id     = aws_vpc.my_vpc.id
+  cidr_block = "10.0.2.0/24"
+  availability_zone = "us-east-1a"
+
+  tags = {
+    Name = "Isolated Private Subnet"
+  }
+}
+
+
+Next we need to create additional Route Table with no routes declaration and associate it with our private Subnet:
+
+resource "aws_route_table" "my_vpc_us_east_1a_private" {
+    vpc_id = aws_vpc.my_vpc.id
+
+    tags = {
+        Name = "Local Route Table for Isolated Private Subnet"
+    }
+}
+
+resource "aws_route_table_association" "my_vpc_us_east_1a_private" {
+    subnet_id = aws_subnet.private.id
+    route_table_id = aws_route_table.my_vpc_us_east_1a_private.id
+}
