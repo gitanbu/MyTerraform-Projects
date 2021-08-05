@@ -1,0 +1,20 @@
+terraform {
+  required_version = ">= 0.12"
+}
+
+provider "aws" {
+  region = "us-west-2"
+}
+
+resource "aws_instance" "fegoserver" {
+  ami           = "ami-079e7a3f57cc8e0d0"
+  instance_type = "t2.micro"
+}
+
+terraform {
+  backend "s3" {
+    bucket = "fegobucket"
+    key    = "terraform/dev/terraform_dev.tfstate"
+    region = "us-west-2"
+  }
+}
